@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, reply/1, send/3, send/4, reply_to/2, start/0]).
+-export([start_link/0, body/1, reply/1, send/3, send/4, reply_to/2, start/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -64,6 +64,11 @@ reply_to([{<<"id">>, ID},
     R1 = [{<<"id">>, ID}, {<<"reply">>, Body}],
     send_to(binary_to_list(Host), Port, Topic, encode(bert, R1)).
 
+body([{<<"id">>, _}, {<<"reply_encoding">>, _}, {<<"reply_host">>, _},
+      {<<"reply_port">>, _}, {<<"reply_topic">>, _}, {<<"request">>, Body}]) ->
+    {ok, Body};
+body(_) ->
+    {error, bad_rpc}.
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
