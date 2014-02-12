@@ -3,7 +3,7 @@
 
 %% @doc HTTP endpoint of one or more NSQ discovery servers.
 {mapping, "rpc.discoverer.$name", "ensq_rpc.rpc_discovereres",
- [{commented, {127.0.0.1, 4161}},
+ [{commented, {"127.0.0.1", 4161}},
   {datatype, ip}]}.
 
 {translation,
