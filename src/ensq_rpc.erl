@@ -69,6 +69,7 @@ body([{<<"id">>, _}, {<<"reply_encoding">>, _}, {<<"reply_host">>, _},
     {ok, Body};
 body(_) ->
     {error, bad_rpc}.
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -89,7 +90,9 @@ init([]) ->
         case application:get_env(rpc_discovereres) of
             {ok, Ds} ->
                 T = case application:get_env(rpc_channel) of
-                        {ok, ID} ->
+                        {ok, ID} when is_list(ID) ->
+                            list_to_binary(ID);
+                        {ok, ID} when is_binary(ID) ->
                             ID;
                         _ ->
                             ID = erlang:phash2(os:cmd("hostname")),
