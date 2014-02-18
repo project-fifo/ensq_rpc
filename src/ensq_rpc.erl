@@ -112,7 +112,7 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({rpc, Host, Port, Topic, Body}, From,
-            State = #state{pending=P, encoding=E0}) ->
+            State = #state{topic=ReplyTopic, pending=P, encoding=E0}) ->
     {Enc, BodyEnc} = case E0 of
                          binary ->
                              {E0, State#state.body_encoding};
@@ -126,7 +126,7 @@ handle_call({rpc, Host, Port, Topic, Body}, From,
             body_encoding = BodyEnc,
             host = Host,
             port = Port,
-            topic = Topic
+            topic = ReplyTopic
            },
     case send_to(Host, Port, Topic, ensq_rpc_proto:encode_request(H, Body)) of
         ok ->
@@ -151,7 +151,7 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 
 handle_cast({reply, Bin}, State = #state{pending = P}) ->
-    case ensq_rpc_proto:decode_reply(Bin) of
+    case ensq_rpc_proto:decode_response(Bin) of
         {ID, Body} ->
             case lists:keyfind(ID, 1, P) of
                 {ID, From} ->

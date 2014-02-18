@@ -16,8 +16,11 @@ clean:
 deps:
 	$(REBAR) get-deps
 
+console-nonode: compile
+	erl -pa ebin -pa deps/*/ebin -s ensq_rpc -config console 
+
 console: compile
-	erl -pa ebin -pa deps/*/ebin -s ensq_rpc -config console
+	erl -pa ebin -pa deps/*/ebin -s ensq_rpc -config console -sname ensq_rpc
 
 APPS = kernel stdlib sasl erts ssl tools os_mon runtime_tools crypto inets \
 	xmerl webtool snmp public_key mnesia eunit syntax_tools compiler
