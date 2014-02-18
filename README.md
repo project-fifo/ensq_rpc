@@ -20,6 +20,8 @@ This is the implementation of a RPC protocol based in the [NSQ](http://bitly.git
 
 ## Encoding
 
+**All integers are encoded as little endian.**
+
 Each message is prefixed with one byte that indicates the encoding the following encodings are used:
 
 * 0 -> binary
@@ -42,8 +44,8 @@ All clients must implement JSON as `encoding` for compatibility, all other encod
 | body_encoding | length(id) | len(host) | len(topic) | len(body) | port |   id    |   host    |   topic    |   body    |
 ```
 The body will need to be further decoded with the given `body_encoding`.
-### JSON/MSGPACK
 
+#### JSON/MSGPACK
 ```json
 {
  "body": Body,     // any
@@ -69,6 +71,7 @@ The body will need to be further decoded with the given `body_encoding`.
 | encoding | body |
 ```
 
+#### Binary
 The binary encoding is defined as:
 ```
 |       1       |     1      |    4      | len(id) | len(body) |
@@ -76,7 +79,7 @@ The binary encoding is defined as:
 ```
 The body will need to be further decoded with the given `body_encoding`.
 
-### JSON/MSGPACK
+#### JSON/MSGPACK
 ```json
 {
  "body": Body,     // any
@@ -89,3 +92,7 @@ The body will need to be further decoded with the given `body_encoding`.
 [{<<"body">>,  Body  :: term()},
  {<<"id">>,    ID    :: binary()}]
 ```
+
+#### Incompatibility
+
+When a endpoint receives a request in a not supported format it can send back a `JSON` encoded reply with the content `{"error": "retransmit"}` for which the client must either fail the request or retransmit it as `JSON` encoded.

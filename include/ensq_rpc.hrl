@@ -4,6 +4,8 @@
 -define(ENC_BIN, 0).
 -define(ENC_JSON, 1).
 -define(ENC_BERT, 2).
+-define(REENCODE, 255).
+
 
 -record(rpc_header,
         {

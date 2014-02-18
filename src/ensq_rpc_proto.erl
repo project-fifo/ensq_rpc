@@ -17,13 +17,13 @@
 -export([decode_request/1, encode_request/2,
          decode_response/1, encode_response/2]).
 
-decode_request(<<?ENC_BIN:8/integer,    %% Binary decoded header.
-                 BE:8/integer,          %% The encoding of the body.
-                 IDL:8/integer,         %% Length of the ID
-                 RHL:16/integer,        %% Length of the Host to return to
-                 RTL:8/integer,         %% Length of the Topic to return to
-                 BL:32/integer,         %% Lenght of the body
-                 Port:32/integer,       %% Port to send the response to
+decode_request(<<?ENC_BIN:8/unsigned-integer,    %% Binary decoded header.
+                 BE:8/unsigned-integer,          %% The encoding of the body.
+                 IDL:8/unsigned-integer,         %% Length of the ID
+                 RHL:16/unsigned-integer,        %% Length of the Host to return to
+                 RTL:8/unsigned-integer,         %% Length of the Topic to return to
+                 BL:32/unsigned-integer,         %% Lenght of the body
+                 Port:32/unsigned-integer,       %% Port to send the response to
                  ID:IDL/binary,         %% The message ID to response with
                  Host:RHL/binary,       %% The Host to send the response to
                  Topic:RTL/binary,      %% The Topic for the response
@@ -40,7 +40,7 @@ decode_request(<<?ENC_BIN:8/integer,    %% Binary decoded header.
           },
     {H, decode(BodyEnc, Body)};
 
-decode_request(<<Enc:8/integer, Bin/binary>>) ->
+decode_request(<<Enc:8/unsigned-integer, Bin/binary>>) ->
     B1 = decode(encoding(Enc), Bin),
     [{<<"body">>, Body},
      {<<"host">>, HostB},
@@ -73,9 +73,10 @@ encode_request(#rpc_header{
     RHL = byte_size(Host),
     RTL = byte_size(Topic),
     BL = byte_size(Bin),
-    <<?ENC_BIN:8/integer, BE:8/integer, IDL:8/integer, RHL:16/integer,
-      RTL:8/integer, BL:32/integer, Port:32/integer, ID:IDL/binary,
-      Host:RHL/binary, Topic:RTL/binary, Bin:BL/binary>>;
+    <<?ENC_BIN:8/unsigned-integer, BE:8/unsigned-integer, IDL:8/unsigned-integer,
+      RHL:16/unsigned-integer, RTL:8/unsigned-integer, BL:32/unsigned-integer,
+      Port:32/unsigned-integer, ID:IDL/binary, Host:RHL/binary, Topic:RTL/binary,
+      Bin:BL/binary>>;
 
 encode_request(#rpc_header{
                   id = ID,
@@ -92,18 +93,19 @@ encode_request(#rpc_header{
                          {<<"port">>, Port},
                          {<<"topic">>, Topic}]),
     Encoding=encoding(E),
-    <<Encoding:8/integer, Content/binary>>.
+    <<Encoding:8/unsigned-integer, Content/binary>>.
 
-decode_response(<<?ENC_BIN:8/integer,
-                  BE:8/integer,          %% The encoding of the body.
-                  IDL:8/integer,         %% Length of the ID
-                  BL:32/integer,         %% Lenght of the body
+
+decode_response(<<?ENC_BIN:8/unsigned-integer,
+                  BE:8/unsigned-integer,          %% The encoding of the body.
+                  IDL:8/unsigned-integer,         %% Length of the ID
+                  BL:32/unsigned-integer,         %% Lenght of the body
                   ID:IDL/binary,         %% The message ID to response with
                   Body:BL/binary>>       %% The body of the message
                ) ->
     {ID, decode(encoding(BE), Body)};
 
-decode_response(<<Enc:8/integer, Bin/binary>>) ->
+decode_response(<<Enc:8/unsigned-integer, Bin/binary>>) ->
     B1 = decode(encoding(Enc), Bin),
     [{<<"body">>, Body},
      {<<"id">>, ID}] = lists:sort(B1),
@@ -118,10 +120,10 @@ encode_response(#rpc_header{
     BE = encoding(BodyEnc),
     IDL = byte_size(ID),
     BL = byte_size(Bin),
-    <<?ENC_BIN:8/integer,
-      BE:8/integer,          %% The encoding of the body.
-      IDL:8/integer,         %% Length of the ID
-      BL:32/integer,         %% Lenght of the body
+    <<?ENC_BIN:8/unsigned-integer,
+      BE:8/unsigned-integer,          %% The encoding of the body.
+      IDL:8/unsigned-integer,         %% Length of the ID
+      BL:32/unsigned-integer,         %% Lenght of the body
       ID:IDL/binary,         %% The message ID to response with
       Bin:BL/binary>>;
 
@@ -132,7 +134,7 @@ encode_response(#rpc_header{
     BE = encoding(Enc),
     B1 = [{<<"body">>, Body}, {<<"id">>, ID}],
     Bin = encode(Enc, B1),
-    <<BE:8/integer, Bin/binary>>.
+    <<BE:8/unsigned-integer, Bin/binary>>.
 
 
 %%%===================================================================

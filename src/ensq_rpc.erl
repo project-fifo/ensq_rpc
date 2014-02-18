@@ -130,7 +130,7 @@ handle_call({rpc, Host, Port, Topic, Body}, From,
            },
     case send_to(Host, Port, Topic, ensq_rpc_proto:encode_request(H, Body)) of
         ok ->
-            {noreply, State#state{pending=[{UUID, From} | P]}};
+            {noreply, State#state{pending=[{UUID, From, {Topic, H, Body}} | P]}};
         E ->
             {reply, E, State}
     end;
@@ -152,9 +152,26 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({reply, Bin}, State = #state{pending = P}) ->
     case ensq_rpc_proto:decode_response(Bin) of
+        {ID, [{<<"error">>, <<"retransmit">>}]} ->
+            case lists:keyfind(ID, 1, P) of
+                {_, From, {Topic, H=#rpc_header{host=Host, port=Port}, Body}} ->
+                    H1 = H#rpc_header{encoding = json, body_encoding = json},
+                    case send_to(Host, Port, Topic, ensq_rpc_proto:encode_request(H1, Body)) of
+                        ok ->
+                            {noreply, State};
+                        E ->
+                            gen_server:reply(From, E),
+                            P1 = lists:keydelete(ID, 1, P),
+                            {noreply, State#state{pending = P1}}
+                    end;
+                _ ->
+                    lager:error("[rpc] Unknown id: ~s", [ID]),
+                    {noreply, State}
+            end;
         {ID, Body} ->
             case lists:keyfind(ID, 1, P) of
-                {ID, From} ->
+
+                {ID, From, _} ->
                     gen_server:reply(From, {ok, Body}),
                     P1 = lists:keydelete(ID, 1, P),
                     {noreply, State#state{pending = P1}};
