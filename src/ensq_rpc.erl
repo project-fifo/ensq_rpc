@@ -10,8 +10,10 @@
 
 -behaviour(gen_server).
 
+-include("ensq_rpc.hrl").
+
 %% API
--export([start_link/0, body/1, reply/1, send/3, send/4, reply_to/2, start/0]).
+-export([start_link/0, reply/1, send/3, send/4, reply_to/2, start/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -19,7 +21,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {pending = [], encoding=json, topic}).
+-record(state, {pending = [], encoding=json, body_encoding=json, topic}).
 
 %%%===================================================================
 %%% API
@@ -42,33 +44,17 @@ start_link() ->
 reply(Reply) ->
     gen_server:cast(?SERVER, {reply, Reply}).
 
+send({Host, Port}, Topic, Body, Timeout) when is_binary(Host) ->
+    send({binary_to_list(Host), Port}, Topic, Body, Timeout);
 send({Host, Port}, Topic, Body, Timeout) ->
     gen_server:call(?SERVER, {rpc, Host, Port, Topic, Body}, Timeout).
-
+send({Host, Port}, Topic, Body) when is_binary(Host)->
+    send({binary_to_list(Host), Port}, Topic, Body);
 send({Host, Port}, Topic, Body) ->
     gen_server:call(?SERVER, {rpc, Host, Port, Topic, Body}).
 
-reply_to([{<<"id">>, ID},
-          {<<"reply_encoding">>, <<"json">>},
-          {<<"reply_host">>, Host},
-          {<<"reply_port">>, Port},
-          {<<"reply_topic">>, Topic} | _], Body) ->
-    R1 = [{<<"id">>, ID}, {<<"reply">>, Body}],
-    send_to(binary_to_list(Host), Port, Topic, encode(json, R1));
-
-reply_to([{<<"id">>, ID},
-          {<<"reply_encoding">>, <<"bert">>},
-          {<<"reply_host">>, Host},
-          {<<"reply_port">>, Port},
-          {<<"reply_topic">>, Topic} | _], Body) ->
-    R1 = [{<<"id">>, ID}, {<<"reply">>, Body}],
-    send_to(binary_to_list(Host), Port, Topic, encode(bert, R1)).
-
-body([{<<"id">>, _}, {<<"reply_encoding">>, _}, {<<"reply_host">>, _},
-      {<<"reply_port">>, _}, {<<"reply_topic">>, _}, {<<"request">>, Body}]) ->
-    {ok, Body};
-body(_) ->
-    {error, bad_rpc}.
+reply_to(H = #rpc_header{host = Host, port=Port, topic=Topic}, Body) ->
+    send_to(Host, Port, Topic, ensq_rpc_proto:encode_response(H, Body)).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -95,7 +81,7 @@ init([]) ->
                         {ok, ID} when is_binary(ID) ->
                             ID;
                         _ ->
-                            ID = erlang:phash2(os:cmd("hostname")),
+                            ID = erlang:phash2({node(), os:cmd("hostname")}),
                             B = list_to_binary(integer_to_list(ID)),
                             <<"rcp-", B/binary>>
                     end,
@@ -125,18 +111,24 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({rpc, Host, Port, Topic, Body}, From, State = #state{pending=P,
-                                                                 encoding=E}) ->
+handle_call({rpc, Host, Port, Topic, Body}, From,
+            State = #state{pending=P, encoding=E0}) ->
+    {Enc, BodyEnc} = case E0 of
+                         binary ->
+                             {E0, State#state.body_encoding};
+                         E0 ->
+                             {E0, E0}
+                     end,
     UUID = uuid:uuid4s(),
-    Body1 = [{<<"reply_topic">>, State#state.topic},
-             {<<"reply_host">>, list_to_binary(Host)},
-             {<<"reply_port">>, Port},
-             {<<"reply_encoding">>, list_to_binary(atom_to_list(E))},
-             {<<"id">>, UUID},
-             {<<"request">>, Body}],
-    lager:info("Encoding: ~p, Body: ~p", [E, Body1]),
-    Bin = encode(E, Body1),
-    case send_to(Host, Port, Topic, Bin) of
+    H =  #rpc_header{
+            id = UUID,
+            encoding = Enc,
+            body_encoding = BodyEnc,
+            host = Host,
+            port = Port,
+            topic = Topic
+           },
+    case send_to(Host, Port, Topic, ensq_rpc_proto:encode_request(H, Body)) of
         ok ->
             {noreply, State#state{pending=[{UUID, From} | P]}};
         E ->
@@ -158,10 +150,9 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 
-handle_cast({reply, Bin}, State = #state{pending = P, encoding = E}) ->
-    Msg = decode(E, Bin),
-    case Msg of
-        [{<<"id">>, ID}, {<<"reply">>, Body}] ->
+handle_cast({reply, Bin}, State = #state{pending = P}) ->
+    case ensq_rpc_proto:decode_reply(Bin) of
+        {ID, Body} ->
             case lists:keyfind(ID, 1, P) of
                 {ID, From} ->
                     gen_server:reply(From, {ok, Body}),
@@ -220,16 +211,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-decode(bert, B) ->
-    lists:sort(binary_to_term(B));
-decode(json, B) ->
-    lists:sort(jsx:decode(B)).
-
-encode(bert, T) ->
-    term_to_binary(T);
-encode(json, T) ->
-    jsx:encode(T).
 
 send_to(Host, Port, Topic, Bin) ->
     case gen_tcp:connect(Host, Port, [binary]) of
