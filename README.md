@@ -6,8 +6,7 @@ This is the implementation of a RPC protocol based in the [NSQ](http://bitly.git
 * Each RPC client has a unique topic on which it receives `responses`.
 * Each request has:
  	* The encoding used.
- 	* Optionally the encoding of the body when the encoding is binary.
-	* A unique ID (generally a uuid but that is an implementation detail).
+	* A 16 byte (128 bit) unique ID  (generally a uuid but that is an implementation detail).
  	* A body that carries the request payload.
  	* An host and port of a NSQD to reply to.
  	* A topic to reply to (which equals the unique topic of the RCP client).
@@ -18,81 +17,46 @@ This is the implementation of a RPC protocol based in the [NSQ](http://bitly.git
 	* The ID of the request.
 	* A Response body.
 
+
+**All data is encoded as big endian.**
+
 ## Encoding
 
-**All integers are encoded as little endian.**
 
 Each message is prefixed with one byte that indicates the encoding the following encodings are used:
 
-* 0 -> binary
-* 1 -> JSON
-* 2 -> BERT
-* 3 -> msgpack
+* 0: binary   - the client hands the data on without further processing
+* 1: JSON
+* 2: BERT
+* 3: msgpack
+* 254: **reserved**
+* 255: **special care for reencoding requests**
 
-All clients must implement JSON as `encoding` for compatibility, all other encodings are optional.
+All clients and endpoints must implement JSON as `encoding` for compatibility, all other encodings are optional.
 
 ```
-|     1    | ...  |
-| encoding | body |
-```
+|  1  | 16 |    1     |     1     |     1      |  4   | len(host) | len(topic) | ...  |
+| vsn | id | encoding | len(host) | len(topic) | port |   host    |   topic    | body |
 
-### Request
-
-#### Binary
-```
-|       1       |     1      |     2     |     1      |    4      |   4  | len(id) | len(host) | len(topic) | len(body) |
-| body_encoding | length(id) | len(host) | len(topic) | len(body) | port |   id    |   host    |   topic    |   body    |
-```
-The body will need to be further decoded with the given `body_encoding`.
-
-#### JSON/MSGPACK
-```json
-{
- "body": Body,     // any
- "host": Host,     // string
- "id":, ID,        // string
- "port": Port,     // number
- "topic": Topic    // string
-}
-```
-
-#### BERT
-```erlang
-[{<<"body">>,  Body  :: term()},
- {<<"host">>,  Host  :: binary()},
- {<<"id">>,    ID    :: binary()},
- {<<"port">>,  Port  :: inet:ip_address()},
- {<<"topic">>, Topic :: binary()}]
 ```
 
 ### Response
 ```
-|     1    | ...  |
-| encoding | body |
-```
-
-#### Binary
-The binary encoding is defined as:
-```
-|       1       |     1      |    4      | len(id) | len(body) |
-| body_encoding | length(id) | len(body) |   id    |   body    |
-```
-The body will need to be further decoded with the given `body_encoding`.
-
-#### JSON/MSGPACK
-```json
-{
- "body": Body,     // any
- "id":, ID         // string
-}
-```
-
-#### BERT
-```erlang
-[{<<"body">>,  Body  :: term()},
- {<<"id">>,    ID    :: binary()}]
+|  1  | 16 |     1    | ...  |
+| vsn | id | encoding | body |
 ```
 
 #### Incompatibility
 
-When a endpoint receives a request in a not supported format it can send back a `JSON` encoded reply with the content `{"error": "retransmit"}` for which the client must either fail the request or retransmit it as `JSON` encoded.
+When a endpoint receives a request in a not supported encoding it can send back a reply with:
+* the id of the request
+* the reserved encoding value 255
+* no body
+
+```
+|  1  | 16 |  1   |
+| vsn | id | 0xff |
+```
+
+The client the must either drop the request or resend it encoded as JSON to guarantee compatibility.
+

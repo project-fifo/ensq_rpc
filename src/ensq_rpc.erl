@@ -112,18 +112,11 @@ init([]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({rpc, Host, Port, Topic, Body}, From,
-            State = #state{topic=ReplyTopic, pending=P, encoding=E0}) ->
-    {Enc, BodyEnc} = case E0 of
-                         binary ->
-                             {E0, State#state.body_encoding};
-                         E0 ->
-                             {E0, E0}
-                     end,
+            State = #state{topic=ReplyTopic, pending=P, encoding=Enc}) ->
     UUID = uuid:uuid4s(),
     H =  #rpc_header{
             id = UUID,
             encoding = Enc,
-            body_encoding = BodyEnc,
             host = Host,
             port = Port,
             topic = ReplyTopic
@@ -152,10 +145,10 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({reply, Bin}, State = #state{pending = P}) ->
     case ensq_rpc_proto:decode_response(Bin) of
-        {ID, [{<<"error">>, <<"retransmit">>}]} ->
+        {ID, reencode} ->
             case lists:keyfind(ID, 1, P) of
                 {_, From, {Topic, H=#rpc_header{host=Host, port=Port}, Body}} ->
-                    H1 = H#rpc_header{encoding = json, body_encoding = json},
+                    H1 = H#rpc_header{encoding = json},
                     case send_to(Host, Port, Topic, ensq_rpc_proto:encode_request(H1, Body)) of
                         ok ->
                             {noreply, State};
@@ -170,7 +163,6 @@ handle_cast({reply, Bin}, State = #state{pending = P}) ->
             end;
         {ID, Body} ->
             case lists:keyfind(ID, 1, P) of
-
                 {ID, From, _} ->
                     gen_server:reply(From, {ok, Body}),
                     P1 = lists:keydelete(ID, 1, P),

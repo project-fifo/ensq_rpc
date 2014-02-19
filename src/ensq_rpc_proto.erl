@@ -15,126 +15,76 @@
 -endif.
 
 -export([decode_request/1, encode_request/2,
-         decode_response/1, encode_response/2]).
+         decode_response/1, encode_response/2,
+         reencode/1]).
 
-decode_request(<<?ENC_BIN:8/unsigned-integer,    %% Binary decoded header.
-                 BE:8/unsigned-integer,          %% The encoding of the body.
-                 IDL:8/unsigned-integer,         %% Length of the ID
-                 RHL:16/unsigned-integer,        %% Length of the Host to return to
-                 RTL:8/unsigned-integer,         %% Length of the Topic to return to
-                 BL:32/unsigned-integer,         %% Lenght of the body
-                 Port:32/unsigned-integer,       %% Port to send the response to
-                 ID:IDL/binary,         %% The message ID to response with
-                 Host:RHL/binary,       %% The Host to send the response to
-                 Topic:RTL/binary,      %% The Topic for the response
-                 Body:BL/binary>>       %% The body of the message
-              ) ->
-    BodyEnc = encoding(BE),
+decode_request(<<?VSN:8/big-unsigned-integer,  %% Protocol version
+                 ID:16/big-binary,             %% Binary ID
+                 Enc:8/big-unsigned-integer,   %% The encoding of the body.
+                 RHL:8/big-unsigned-integer,  %% Length of the Host
+                 RTL:8/big-unsigned-integer,   %% Length of the Topic
+                 Port:32/big-unsigned-integer, %% Port to send the response to
+                 Host:RHL/big-binary,          %% The response Host
+                 Topic:RTL/big-binary,         %% The response Topic
+                 Body/big-binary>>) ->      %% The body of the message
     H = #rpc_header{
+           vsn = ?VSN,
            id = ID,
-           encoding = binary,
-           body_encoding = BodyEnc,
            host = binary_to_list(Host),
            port = Port,
            topic = Topic
           },
-    {H, decode(BodyEnc, Body)};
-
-decode_request(<<Enc:8/unsigned-integer, Bin/binary>>) ->
-    B1 = decode(encoding(Enc), Bin),
-    [{<<"body">>, Body},
-     {<<"host">>, HostB},
-     {<<"id">>, ID},
-     {<<"port">>, Port},
-     {<<"topic">>, Topic}] = lists:sort(B1),
-    Host = binary_to_list(HostB),
-    H = #rpc_header{
-           id = ID,
-           encoding = encoding(Enc),
-           body_encoding = encoding(Enc),
-           host = Host,
-           port = Port,
-           topic = Topic
-          },
-    {H, Body}.
+    case encoding(Enc) of
+        unsupported ->
+            {h, unsupported};
+        E ->
+            {H#rpc_header{encoding = E}, decode(E, Body)}
+    end.
 
 encode_request(#rpc_header{
                   id = ID,
-                  encoding = binary,
-                  body_encoding = BodyEnc,
+                  encoding = Enc,
                   host = HostL,
                   port = Port,
                   topic = Topic
                  }, Body) ->
     Host = list_to_binary(HostL),
-    BE = encoding(BodyEnc),
-    Bin = encode(BodyEnc, Body),
-    IDL = byte_size(ID),
+    E = encoding(Enc),
+    Bin = encode(Enc, Body),
     RHL = byte_size(Host),
     RTL = byte_size(Topic),
-    BL = byte_size(Bin),
-    <<?ENC_BIN:8/unsigned-integer, BE:8/unsigned-integer, IDL:8/unsigned-integer,
-      RHL:16/unsigned-integer, RTL:8/unsigned-integer, BL:32/unsigned-integer,
-      Port:32/unsigned-integer, ID:IDL/binary, Host:RHL/binary, Topic:RTL/binary,
-      Bin:BL/binary>>;
-
-encode_request(#rpc_header{
-                  id = ID,
-                  encoding = E,
-                  body_encoding = E,
-                  host = HostL,
-                  port = Port,
-                  topic = Topic
-                 }, Body) ->
-    Host = list_to_binary(HostL),
-    Content = encode(E, [{<<"body">>, Body},
-                         {<<"host">>, Host},
-                         {<<"id">>, ID},
-                         {<<"port">>, Port},
-                         {<<"topic">>, Topic}]),
-    Encoding=encoding(E),
-    <<Encoding:8/unsigned-integer, Content/binary>>.
+    <<?VSN:8/big-unsigned-integer, ID:16/big-binary, E:8/big-unsigned-integer,
+      RHL:8/big-unsigned-integer,
+      RTL:8/big-unsigned-integer,
+      Port:32/big-unsigned-integer,Host:RHL/big-binary, Topic:RTL/big-binary,
+      Bin/big-binary>>.
 
 
-decode_response(<<?ENC_BIN:8/unsigned-integer,
-                  BE:8/unsigned-integer,          %% The encoding of the body.
-                  IDL:8/unsigned-integer,         %% Length of the ID
-                  BL:32/unsigned-integer,         %% Lenght of the body
-                  ID:IDL/binary,         %% The message ID to response with
-                  Body:BL/binary>>       %% The body of the message
-               ) ->
-    {ID, decode(encoding(BE), Body)};
+decode_response(<<?VSN:8/big-unsigned-integer, ID:16/big-binary,
+                  ?REENCODE:8/big-unsigned-integer>>) ->
+    {ID, reencode};
+decode_response(<<?VSN:8/big-unsigned-integer,
+                  ID:16/big-binary,              %% ID of the request
+                  BE:8/big-unsigned-integer,     %% The encoding of the body.
+                  Body/big-binary>>) ->       %% The body of the message
+    {ID, decode(encoding(BE), Body)}.
 
-decode_response(<<Enc:8/unsigned-integer, Bin/binary>>) ->
-    B1 = decode(encoding(Enc), Bin),
-    [{<<"body">>, Body},
-     {<<"id">>, ID}] = lists:sort(B1),
-    {ID, Body}.
-
-encode_response(#rpc_header{
-                   id = ID,
-                   encoding = binary,
-                   body_encoding = BodyEnc
-                  }, Body) ->
-    Bin = encode(BodyEnc, Body),
-    BE = encoding(BodyEnc),
-    IDL = byte_size(ID),
-    BL = byte_size(Bin),
-    <<?ENC_BIN:8/unsigned-integer,
-      BE:8/unsigned-integer,          %% The encoding of the body.
-      IDL:8/unsigned-integer,         %% Length of the ID
-      BL:32/unsigned-integer,         %% Lenght of the body
-      ID:IDL/binary,         %% The message ID to response with
-      Bin:BL/binary>>;
+%% A response of 255 requirests a reencode
 
 encode_response(#rpc_header{
                    id = ID,
                    encoding = Enc
                   }, Body) ->
+    Bin = encode(Enc, Body),
     BE = encoding(Enc),
-    B1 = [{<<"body">>, Body}, {<<"id">>, ID}],
-    Bin = encode(Enc, B1),
-    <<BE:8/unsigned-integer, Bin/binary>>.
+    <<?VSN:8/big-unsigned-integer,
+      ID:16/big-binary,
+      BE:8/big-unsigned-integer,          %% The encoding of the body.
+      Bin/big-binary>>.
+
+reencode(#rpc_header{id=ID}) ->
+    <<?VSN:8/big-unsigned-integer, ID:16/big-binary,
+      ?REENCODE:8/big-unsigned-integer>>.
 
 
 %%%===================================================================
@@ -152,7 +102,7 @@ encode(json, B) ->
     jsx:encode(B);
 encode(bert, B) ->
     term_to_binary(B);
-encode(binary, B) when is_binary(B)->
+encode(binary, B) when is_binary(B) ->
     B.
 
 encoding(<<"binary">>) -> binary;
@@ -163,48 +113,35 @@ encoding(?ENC_JSON) -> json;
 encoding(json) -> ?ENC_JSON;
 encoding(<<"bert">>) -> bert;
 encoding(?ENC_BERT) -> bert;
-encoding(bert) -> ?ENC_BERT.
+encoding(bert) -> ?ENC_BERT;
+% encoding(?ENC_BERT) -> msgpack;
+% encoding(msgpack) -> ?ENC_BERT;
+encoding(_N) when is_integer(_N) -> unsupported.
 
 %%%===================================================================
 %%% Tests
 %%%===================================================================
 -ifdef(TEST).
-mk_h(E, BE) ->
+-define(ID, <<"1234567890abcdef">>).
+mk_h(E) ->
     #rpc_header{
-       id = <<"id">>,
+       id = ?ID,
        encoding = E,
-       body_encoding = BE,
        host = "localhost",
        port = 1234,
        topic = <<"topic">>
       }.
 
-req_bin_bin_test() ->
-    Header = mk_h(binary, binary),
+req_bin_test() ->
+    Header = mk_h(binary),
     Body = <<"body">>,
     Msg = encode_request(Header, Body),
     {Header1, Body1} = decode_request(Msg),
     ?assertEqual(Header, Header1),
     ?assertEqual(Body, Body1).
 
-req_bin_json_test() ->
-    Header = mk_h(binary, json),
-    Body = [{<<"body">>, 42}],
-    Msg = encode_request(Header, Body),
-    {Header1, Body1} = decode_request(Msg),
-    ?assertEqual(Header, Header1),
-    ?assertEqual(Body, Body1).
-
-req_bin_bert_test() ->
-    Header = mk_h(binary, bert),
-    Body = [{<<"body">>, 42}],
-    Msg = encode_request(Header, Body),
-    {Header1, Body1} = decode_request(Msg),
-    ?assertEqual(Header, Header1),
-    ?assertEqual(Body, Body1).
-
 req_json_test() ->
-    Header = mk_h(json, json),
+    Header = mk_h(json),
     Body = [{<<"body">>, 42}],
     Msg = encode_request(Header, Body),
     {Header1, Body1} = decode_request(Msg),
@@ -212,7 +149,7 @@ req_json_test() ->
     ?assertEqual(Body, Body1).
 
 req_bert_test() ->
-    Header = mk_h(bert, bert),
+    Header = mk_h(bert),
     Body = [{<<"body">>, 42}],
     Msg = encode_request(Header, Body),
     {Header1, Body1} = decode_request(Msg),
@@ -220,45 +157,34 @@ req_bert_test() ->
     ?assertEqual(Body, Body1).
 
 
-resp_bin_bin_test() ->
-    Header = mk_h(binary, binary),
+resp_bin_test() ->
+    Header = mk_h(binary),
     Body = <<"body">>,
     Msg = encode_response(Header, Body),
     {ID, Body1} = decode_response(Msg),
-    ?assertEqual(<<"id">>, ID),
-    ?assertEqual(Body, Body1).
-
-resp_bin_json_test() ->
-    Header = mk_h(binary, json),
-    Body = [{<<"body">>, 42}],
-    Msg = encode_response(Header, Body),
-    {ID, Body1} = decode_response(Msg),
-    ?assertEqual(<<"id">>, ID),
-    ?assertEqual(Body, Body1).
-
-resp_bin_bert_test() ->
-    Header = mk_h(binary, bert),
-    Body = [{<<"body">>, 42}],
-    Msg = encode_response(Header, Body),
-    {ID, Body1} = decode_response(Msg),
-    ?assertEqual(<<"id">>, ID),
+    ?assertEqual(?ID, ID),
     ?assertEqual(Body, Body1).
 
 resp_json_test() ->
-    Header = mk_h(json, json),
+    Header = mk_h(json),
     Body = [{<<"body">>, 42}],
     Msg = encode_response(Header, Body),
     {ID, Body1} = decode_response(Msg),
-    ?assertEqual(<<"id">>, ID),
+    ?assertEqual(?ID, ID),
     ?assertEqual(Body, Body1).
 
 resp_bert_test() ->
-    Header = mk_h(bert, bert),
+    Header = mk_h(bert),
     Body = [{<<"body">>, 42}],
     Msg = encode_response(Header, Body),
     {ID, Body1} = decode_response(Msg),
-    ?assertEqual(<<"id">>, ID),
+    ?assertEqual(?ID, ID),
     ?assertEqual(Body, Body1).
 
+reencode_test() ->
+    Header = mk_h(bert),
+    Msg = reencode(Header),
+    Res = decode_response(Msg),
+    ?assertEqual({?ID, reencode}, Res).
 
 -endif.
