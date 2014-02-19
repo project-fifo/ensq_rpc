@@ -114,8 +114,8 @@ encoding(json) -> ?ENC_JSON;
 encoding(<<"bert">>) -> bert;
 encoding(?ENC_BERT) -> bert;
 encoding(bert) -> ?ENC_BERT;
-% encoding(?ENC_BERT) -> msgpack;
-% encoding(msgpack) -> ?ENC_BERT;
+                                                % encoding(?ENC_BERT) -> msgpack;
+                                                % encoding(msgpack) -> ?ENC_BERT;
 encoding(_N) when is_integer(_N) -> unsupported.
 
 %%%===================================================================

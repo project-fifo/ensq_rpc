@@ -5,13 +5,15 @@ This is the implementation of a RPC protocol based in the [NSQ](http://bitly.git
 * Each RPC endpoint has a topic on which it receives `requests`.
 * Each RPC client has a unique topic on which it receives `responses`.
 * Each request has:
- 	* The encoding used.
+	* The version.
+  	* The encoding used.
 	* A 16 byte (128 bit) unique ID  (generally a uuid but that is an implementation detail).
  	* A body that carries the request payload.
  	* An host and port of a NSQD to reply to.
  	* A topic to reply to (which equals the unique topic of the RCP client).
  	
 * Each response has:
+	* The version.
 	* The encoding used.
  	* Optionally the encoding of the body when the encoding is binary.
 	* The ID of the request.
@@ -30,7 +32,7 @@ Each message is prefixed with one byte that indicates the encoding the following
 * 2: BERT
 * 3: msgpack
 * 254: **reserved**
-* 255: **special care for reencoding requests**
+* 255: **reserved: special care for reencoding requests**
 
 All clients and endpoints must implement JSON as `encoding` for compatibility, all other encodings are optional.
 
