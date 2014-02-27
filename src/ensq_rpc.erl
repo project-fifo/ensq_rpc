@@ -113,7 +113,7 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call({rpc, Host, Port, Topic, Body}, From,
             State = #state{topic=ReplyTopic, pending=P, encoding=Enc}) ->
-    UUID = uuid:uuid4s(),
+    UUID = uuid:uuid4(),
     H =  #rpc_header{
             id = UUID,
             encoding = Enc,
