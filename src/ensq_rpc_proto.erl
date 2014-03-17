@@ -105,13 +105,13 @@ encode(bert, B) ->
 encode(binary, B) when is_binary(B) ->
     B.
 
-encoding(<<"binary">>) -> binary;
+%encoding(<<"binary">>) -> binary;
 encoding(?ENC_BIN) -> binary;
 encoding(binary) -> ?ENC_BIN;
-encoding(<<"json">>) -> json;
+%encoding(<<"json">>) -> json;
 encoding(?ENC_JSON) -> json;
 encoding(json) -> ?ENC_JSON;
-encoding(<<"bert">>) -> bert;
+%encoding(<<"bert">>) -> bert;
 encoding(?ENC_BERT) -> bert;
 encoding(bert) -> ?ENC_BERT;
                                                 % encoding(?ENC_BERT) -> msgpack;

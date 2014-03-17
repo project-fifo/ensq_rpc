@@ -11,9 +11,9 @@
 -record(rpc_header,
         {
           id :: binary(),
-          vsn = ?VSN :: pos_integer(),
+          vsn = ?VSN :: non_neg_integer(),
           encoding :: encoding(),
-          host :: string(),
-          port :: inet:ip_address(),
+          host :: inet:ip_address() | inet:hostname(),
+          port :: inet:port_number(),
           topic :: binary()
         }).

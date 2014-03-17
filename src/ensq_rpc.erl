@@ -170,10 +170,7 @@ handle_cast({reply, Bin}, State = #state{pending = P}) ->
                 _ ->
                     lager:error("[rpc] Unknown id: ~s", [ID]),
                     {noreply, State}
-            end;
-        Msg ->
-            lager:error("[rpc] Unknown reply: ~p", [Msg]),
-            {noreply, State}
+            end
     end;
 
 handle_cast(_Msg, State) ->
