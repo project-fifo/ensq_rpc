@@ -85,7 +85,7 @@ init([]) ->
                             B = list_to_binary(integer_to_list(ID)),
                             <<"rcp-", B/binary>>
                     end,
-                ensq:init({Ds, [{T, [{<<"rpc#ephemeral">>, ensq_rpc_handler}], []}]}),
+                ensq:init({Ds, [{T, [{<<"rpc">>, ensq_rpc_handler}], []}]}),
                 T;
             _ ->
                 undefined
