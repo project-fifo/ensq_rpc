@@ -18,4 +18,3 @@ error(Msg, State) ->
 message(Msg, _,  State) ->
     ensq_rpc:reply(Msg),
     {ok, State}.
-
