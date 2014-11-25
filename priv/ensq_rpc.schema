@@ -9,7 +9,7 @@
 {translation,
  "ensq_rpc.rpc_discovereres",
  fun(Conf) ->
-         Ds = cuttlefish_util:filter_by_variable_starts_with("rpc.discoverer", Conf),
+         Ds = cuttlefish_variable:filter_by_prefix("rpc.discoverer", Conf),
          [ IP || {_, IP} <- Ds]
  end
 }.
